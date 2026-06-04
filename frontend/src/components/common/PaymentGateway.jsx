@@ -16,7 +16,9 @@ const CheckoutForm = ({ amount, onSuccess, onError, orderId, studentId, cardElem
   const [cardError, setCardError] = useState(null);
 
   const handleSubmit = async (event) => {
-    event.preventDefault();
+    if (event && event.preventDefault) {
+      event.preventDefault();
+    }
     setProcessing(true);
     setCardError(null);
 
@@ -87,7 +89,7 @@ const CheckoutForm = ({ amount, onSuccess, onError, orderId, studentId, cardElem
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-4">
       <div className="border border-white/10 rounded-lg p-4 bg-[#111113]">
         <CardElement
           options={{
@@ -113,13 +115,14 @@ const CheckoutForm = ({ amount, onSuccess, onError, orderId, studentId, cardElem
       )}
 
       <button
-        type="submit"
+        type="button"
+        onClick={handleSubmit}
         disabled={!stripe || processing}
         className="w-full bg-[#e07a7a] hover:bg-[#d06060] text-white py-3 px-4 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg min-h-[48px]"
       >
         {processing ? 'Processing...' : `Pay ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount)}`}
       </button>
-    </form>
+    </div>
   );
 };
 
