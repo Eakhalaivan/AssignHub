@@ -1,0 +1,427 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Dark Theme (default) ─────────────────────────────── */
+:root,
+[data-theme='dark'] {
+  --bg-void: #09090b;
+  --bg-elevated: #111113;
+  --bg-card: rgba(17, 17, 19, 0.8);
+  --bg-card-hover: rgba(24, 24, 27, 0.9);
+
+  --text-primary: #fafafa;
+  --text-secondary: #d4d4d8;
+  --text-muted: #71717a;
+
+  --plasma: #c5a880;
+  --orbit: #52525b;
+  --alert: #cb6e6e;
+  --warning: #dfa157;
+  --success: #70a382;
+
+  --border-primary: rgba(255, 255, 255, 0.075);
+  --border-glow: rgba(197, 168, 128, 0.18);
+
+  --shadow-glow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --input-bg: #121214;
+  --input-bg-focus: #161619;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.08);
+  --grid-line: rgba(255, 255, 255, 0.005);
+  --spotlight: rgba(197, 168, 128, 0.05);
+}
+
+/* ── Light Theme ──────────────────────────────────────── */
+[data-theme='light'] {
+  --bg-void: #f5f4f1;
+  --bg-elevated: #ffffff;
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --bg-card-hover: rgba(248, 247, 244, 0.95);
+
+  --text-primary: #1a1a1a;
+  --text-secondary: #3f3f46;
+  --text-muted: #71717a;
+
+  --plasma: #a07850;       /* deeper champagne for light bg contrast */
+  --orbit: #a1a1aa;
+  --alert: #b84c4c;
+  --warning: #c47f2a;
+  --success: #4a7a5a;
+
+  --border-primary: rgba(0, 0, 0, 0.08);
+  --border-glow: rgba(160, 120, 80, 0.2);
+
+  --shadow-glow: 0 4px 20px rgba(0, 0, 0, 0.08);
+
+  --input-bg: #f0ede8;
+  --input-bg-focus: #e8e4dc;
+  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --grid-line: rgba(0, 0, 0, 0.025);
+  --spotlight: rgba(160, 120, 80, 0.04);
+}
+
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  /* Smooth theme transition on all elements */
+  transition: background-color 0.25s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+body {
+  background-color: var(--bg-void);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Subtle, high-end background layout grid */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: 
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+  transition: none;
+}
+
+/* Soft ambient spotlight matching luxury gold */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 500px;
+  background: radial-gradient(circle 600px at 50% -200px, var(--spotlight), transparent 80%);
+  pointer-events: none;
+  z-index: 1;
+  transition: none;
+}
+
+/* Modern clean scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-void);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-sm);
+  transition: background 0.25s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(197, 168, 128, 0.3);
+}
+
+/* Dashboard Panel Card */
+.glass {
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.glass-elevated {
+  background: var(--bg-card-hover);
+  border: 1px solid var(--border-glow);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* Luxury border highlight utilities */
+.border-gold-subtle {
+  border-color: rgba(197, 168, 128, 0.15);
+}
+
+/* Premium SaaS Inputs */
+.input-antigravity {
+  background: var(--input-bg);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13.5px;
+  outline: none;
+  width: 100%;
+  transition: all 0.2s ease-in-out;
+}
+.input-antigravity:focus {
+  border-color: var(--plasma);
+  box-shadow: 0 0 0 2px rgba(197, 168, 128, 0.12);
+  background: var(--input-bg-focus);
+}
+.input-antigravity::placeholder {
+  color: var(--text-muted);
+}
+.input-antigravity:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bg-grid-ambient {
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.002) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.002) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Hide futuristic glows and cyberpunk elements */
+.text-glow-plasma,
+.text-glow-orbit,
+.text-glow-alert {
+  text-shadow: none !important;
+}
+
+.shadow-glow-plasma,
+.shadow-glow-orbit,
+.shadow-glow-alert {
+  box-shadow: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LIGHT THEME OVERRIDES
+   Targets hardcoded Tailwind hex classes that bypass variables
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Backgrounds ─────────────────────────────────────────── */
+[data-theme='light'] .bg-\[\#111113\],
+[data-theme='light'] .bg-\[\#0d0d0f\],
+[data-theme='light'] .bg-\[\#121214\],
+[data-theme='light'] .bg-\[\#161619\],
+[data-theme='light'] .bg-\[\#09090b\] {
+  background-color: #ffffff !important;
+}
+
+[data-theme='light'] .bg-void {
+  background-color: #f5f4f1 !important;
+}
+
+/* Sidebar specifically — keep subtle warm off-white */
+[data-theme='light'] aside {
+  background-color: #faf9f7 !important;
+  border-right-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* ── Borders ─────────────────────────────────────────────── */
+[data-theme='light'] .border-white\/5,
+[data-theme='light'] .border-white\/\[0\.05\],
+[data-theme='light'] .border-white\/\[0\.02\],
+[data-theme='light'] .border-white\/\[0\.03\] {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme='light'] .border-white\/8,
+[data-theme='light'] .border-white\/10 {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* ── Text Colors ─────────────────────────────────────────── */
+[data-theme='light'] .text-\[\#fafafa\],
+[data-theme='light'] .text-primary {
+  color: #1a1a1a !important;
+}
+
+[data-theme='light'] .text-\[\#d4d4d8\],
+[data-theme='light'] .text-secondary {
+  color: #3f3f46 !important;
+}
+
+[data-theme='light'] .text-\[\#8e8e93\],
+[data-theme='light'] .text-muted {
+  color: #71717a !important;
+}
+
+[data-theme='light'] .text-white {
+  color: #1a1a1a !important;
+}
+
+/* Champagne gold — slightly darker for light bg contrast */
+[data-theme='light'] .text-\[\#c5a880\] {
+  color: #a07850 !important;
+}
+
+[data-theme='light'] .text-\[\#70a382\] {
+  color: #3d7a56 !important;
+}
+
+[data-theme='light'] .text-\[\#cb6e6e\] {
+  color: #a84040 !important;
+}
+
+[data-theme='light'] .text-\[\#dfa157\] {
+  color: #b07030 !important;
+}
+
+/* ── Zinc text shades ────────────────────────────────────── */
+[data-theme='light'] .text-zinc-600,
+[data-theme='light'] .text-zinc-700 {
+  color: #52525b !important;
+}
+
+/* ── Stat & Card values (the invisible number fix) ───────── */
+[data-theme='light'] .font-mono,
+[data-theme='light'] .font-orbitron {
+  color: inherit;
+}
+
+/* ── Gold accent bg tints ────────────────────────────────── */
+[data-theme='light'] .bg-\[\#c5a880\]\/10,
+[data-theme='light'] .bg-\[\#c5a880\]\/15 {
+  background-color: rgba(160, 120, 80, 0.08) !important;
+}
+
+[data-theme='light'] .bg-\[\#c5a880\]\/20 {
+  background-color: rgba(160, 120, 80, 0.12) !important;
+}
+
+[data-theme='light'] .border-\[\#c5a880\]\/20,
+[data-theme='light'] .border-\[\#c5a880\]\/25,
+[data-theme='light'] .border-\[\#c5a880\]\/30,
+[data-theme='light'] .border-\[\#c5a880\]\/40 {
+  border-color: rgba(160, 120, 80, 0.25) !important;
+}
+
+/* ── Alert / success tints ───────────────────────────────── */
+[data-theme='light'] .bg-\[\#70a382\]\/5,
+[data-theme='light'] .bg-\[\#70a382\]\/10 {
+  background-color: rgba(61, 122, 86, 0.06) !important;
+}
+
+[data-theme='light'] .border-\[\#70a382\]\/20,
+[data-theme='light'] .border-\[\#70a382\]\/30 {
+  border-color: rgba(61, 122, 86, 0.2) !important;
+}
+
+[data-theme='light'] .bg-\[\#cb6e6e\]\/10 {
+  background-color: rgba(168, 64, 64, 0.07) !important;
+}
+
+/* ── White/transparent bg tints ─────────────────────────── */
+[data-theme='light'] .bg-white\/\[0\.02\],
+[data-theme='light'] .bg-white\/\[0\.03\],
+[data-theme='light'] .bg-white\/\[0\.05\],
+[data-theme='light'] .bg-white\/\[0\.07\] {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme='light'] .bg-white\/5 {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+/* ── Hover states ────────────────────────────────────────── */
+[data-theme='light'] .hover\:bg-white\/\[0\.02\]:hover,
+[data-theme='light'] .hover\:bg-white\/\[0\.03\]:hover,
+[data-theme='light'] .hover\:bg-white\/\[0\.07\]:hover {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+/* ── Sidebar nav active state ────────────────────────────── */
+[data-theme='light'] .hover\:text-\[\#c5a880\]:hover {
+  color: #a07850 !important;
+}
+
+/* ── Backdrop (mobile sidebar overlay) ──────────────────── */
+[data-theme='light'] .bg-black\/80 {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* ── Command Palette ─────────────────────────────────────── */
+[data-theme='light'] .bg-\[\#111113\].rounded-xl,
+[data-theme='light'] .bg-\[\#111113\].overflow-hidden {
+  background-color: #ffffff !important;
+}
+
+/* ── DataTable / dark table areas ───────────────────────── */
+[data-theme='light'] table,
+[data-theme='light'] thead,
+[data-theme='light'] tbody,
+[data-theme='light'] tr,
+[data-theme='light'] td,
+[data-theme='light'] th {
+  background-color: transparent;
+  color: var(--text-primary);
+}
+
+/* ── Skeleton loaders ────────────────────────────────────── */
+[data-theme='light'] .skeleton,
+[data-theme='light'] .animate-pulse {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* ── Recharts / chart text ───────────────────────────────── */
+[data-theme='light'] .recharts-text,
+[data-theme='light'] .recharts-cartesian-axis-tick-value {
+  fill: #71717a !important;
+}
+
+[data-theme='light'] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #ffffff !important;
+  border-color: rgba(0,0,0,0.1) !important;
+  color: #1a1a1a !important;
+}
+
+/* ── kbd elements (command palette) ─────────────────────── */
+[data-theme='light'] kbd {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: #52525b !important;
+}
+
+/* ── Custom Plan Badges & Consultation Overlay (Theme Aware) ── */
+.plan-badge.plan-free {
+  background-color: #27272a;
+  border-color: #3f3f46;
+  color: #a1a1aa !important; /* Ensure override of font-mono color inherit */
+}
+.plan-badge.plan-pro {
+  background-color: rgba(197, 168, 128, 0.15);
+  border-color: rgba(197, 168, 128, 0.3);
+  color: #c5a880 !important;
+}
+.plan-badge.plan-enterprise {
+  background-color: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.2);
+  color: rgb(192, 132, 252) !important;
+}
+
+.consultation-overlay {
+  background-image: linear-gradient(to right, #18181b, #09090b, #18181b);
+  opacity: 0.8;
+}
+
+/* Light theme overrides */
+[data-theme='light'] .plan-badge.plan-free {
+  background-color: #f4f4f5 !important;
+  border-color: #e4e4e7 !important;
+  color: #71717a !important;
+}
+[data-theme='light'] .plan-badge.plan-pro {
+  background-color: rgba(160, 120, 80, 0.08) !important;
+  border-color: rgba(160, 120, 80, 0.25) !important;
+  color: #a07850 !important;
+}
+[data-theme='light'] .plan-badge.plan-enterprise {
+  background-color: rgba(147, 51, 234, 0.08) !important;
+  border-color: rgba(147, 51, 234, 0.2) !important;
+  color: #7c3aed !important;
+}
+
+[data-theme='light'] .consultation-overlay {
+  background-image: linear-gradient(to right, #fcfbfa, #f5f4f1, #fcfbfa) !important;
+  opacity: 0.95 !important;
+}

@@ -1,0 +1,1 @@
+ALTER TABLE payments MODIFY COLUMN payment_type VARCHAR(50) NOT NULL;

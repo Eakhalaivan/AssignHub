@@ -1,0 +1,31 @@
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Build and dependency directories
+node_modules/
+frontend/node_modules/
+backend/target/
+frontend/dist/
+backend/uploads/
+
+# IDE / Editor Files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.iml
+*.iws
+*.ipr
+
+# Environments / Credentials
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key

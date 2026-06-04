@@ -1,0 +1,56 @@
+name: Academix Backend CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master, dev ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: academix
+          MYSQL_ROOT_PASSWORD: Eakhal@2004
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+      redis:
+        image: redis:7.0-alpine
+        ports:
+          - 6379:6379
+        options: --health-cmd="redis-cli ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: maven
+
+    - name: Initialize Database & Run Maven Compile
+      run: |
+        mvn clean compile -B
+
+    - name: Execute Maven Tests
+      env:
+        SPRING_DATASOURCE_URL: jdbc:mysql://127.0.0.1:3306/academix?useSSL=false&serverTimezone=Asia/Kolkata&allowPublicKeyRetrieval=true
+        SPRING_DATASOURCE_USERNAME: root
+        SPRING_DATASOURCE_PASSWORD: Eakhal@2004
+        SPRING_DATA_REDIS_HOST: 127.0.0.1
+        SPRING_DATA_REDIS_PORT: 6379
+      run: |
+        mvn test -B
+
+    - name: Package Application JAR Artifact
+      run: |
+        mvn package -DskipTests -B

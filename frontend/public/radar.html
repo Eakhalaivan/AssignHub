@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Nearby Available Writers Radar</title>
+  <!-- Outfit for UI, Fira Code for Monospace -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-color: #fcfbfa;
+      --radar-color: rgba(232, 160, 160, 0.9);
+      --radar-bg-color: rgba(232, 160, 160, 0.05);
+      --text-primary: #1e1e24;
+      --text-secondary: #6e6e77;
+      --color-available: #00c896;
+      --color-busy: #FFA500;
+      --color-offline: #a1a1aa;
+      --font-ui: 'Outfit', sans-serif;
+      --font-mono: 'Fira Code', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      font-family: var(--font-ui);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Ambient background grid */
+    .bg-grid {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: 
+        radial-gradient(circle at center, rgba(232, 160, 160, 0.04) 0%, transparent 70%),
+        linear-gradient(rgba(0, 0, 0, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.015) 1px, transparent 1px);
+      background-size: 100% 100%, 40px 40px, 40px 40px;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* Main Container */
+    .radar-wrapper {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+      width: 100%;
+      max-width: 900px;
+      padding: 2rem;
+      opacity: 0;
+      transition: opacity 0.5s ease-in-out;
+    }
+
+    .radar-wrapper.visible {
+      opacity: 1;
+    }
+
+    /* Headers */
+    .header {
+      text-align: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .title {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--text-primary);
+      margin-bottom: 0.75rem;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(232, 160, 160, 0.1);
+      border: 1px solid rgba(232, 160, 160, 0.2);
+      padding: 0.35rem 1rem;
+      border-radius: 9999px;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: #b86262;
+      letter-spacing: 0.05em;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background-color: #e8a0a0;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #e8a0a0;
+      animation: pulse-dot 1.5s infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.4); opacity: 0.4; }
+    }
+
+    /* Radar Canvas Container */
+    .radar-container {
+      position: relative;
+      border-radius: 50%;
+      background: var(--bg-color);
+      box-shadow: 
+        0 20px 50px rgba(0, 0, 0, 0.03),
+        inset 0 0 30px rgba(232, 160, 160, 0.04);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+    }
+
+    canvas {
+      display: block;
+      border-radius: 50%;
+      cursor: crosshair;
+    }
+
+    /* Interactive Overlay for Div-based blips */
+    .radar-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Blip CSS Marker Overlay */
+    .blip-marker {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      transform: translate(-50%, -50%);
+      pointer-events: auto;
+      cursor: pointer;
+      z-index: 12;
+    }
+
+    .blip-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      transition: background-color 0.3s ease;
+      position: relative;
+    }
+
+    .blip-dot::after {
+      content: '';
+      position: absolute;
+      top: -6px;
+      left: -6px;
+      right: -6px;
+      bottom: -6px;
+      border-radius: 50%;
+      border: 1px solid currentColor;
+      opacity: 0.2;
+    }
+
+    .blip-halo {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 32px;
+      height: 32px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background-color: currentColor;
+      opacity: 0.15;
+      animation: pulse-halo 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+      pointer-events: none;
+    }
+
+    @keyframes pulse-halo {
+      0% {
+        transform: translate(-50%, -50%) scale(0.3);
+        opacity: 0.4;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(1.4);
+        opacity: 0;
+      }
+    }
+
+    /* Tooltip Glassmorphic Styling */
+    .tooltip {
+      position: absolute;
+      width: 250px;
+      background: rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border: 1px solid rgba(232, 160, 160, 0.3);
+      border-radius: 16px;
+      padding: 1.25rem;
+      box-shadow: 
+        0 10px 30px rgba(0, 0, 0, 0.05),
+        0 1px 3px rgba(0, 0, 0, 0.01);
+      z-index: 100;
+      pointer-events: auto;
+      transform: scale(0.9);
+      opacity: 0;
+      visibility: hidden;
+      transform-origin: bottom center;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease, visibility 0.2s;
+    }
+
+    .tooltip.visible {
+      transform: scale(1);
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .tooltip-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.5rem;
+    }
+
+    .tooltip-name {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .tooltip-rating {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(255, 215, 0, 0.15);
+      color: #9a7d0a;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+    }
+
+    .tooltip-spec {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      margin-bottom: 0.75rem;
+    }
+
+    .tooltip-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid rgba(0, 0, 0, 0.05);
+      padding-top: 0.75rem;
+      margin-top: 0.5rem;
+    }
+
+    .badge {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 700;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+    }
+
+    .badge-available {
+      background: rgba(0, 200, 150, 0.12);
+      color: #008765;
+    }
+
+    .badge-busy {
+      background: rgba(255, 165, 0, 0.12);
+      color: #b56c02;
+    }
+
+    .badge-offline {
+      background: rgba(161, 161, 170, 0.15);
+      color: #52525b;
+    }
+
+    .tooltip-btn {
+      background: #e8a0a0;
+      border: none;
+      outline: none;
+      color: white;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(232, 160, 160, 0.3);
+      transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+    }
+
+    .tooltip-btn:hover {
+      background: #df8a8a;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 14px rgba(232, 160, 160, 0.4);
+    }
+
+    .tooltip-btn:active {
+      transform: translateY(0);
+    }
+
+    /* Footer Stats & Legend */
+    .radar-footer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.75rem;
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+
+    .legend {
+      display: flex;
+      gap: 1.5rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .stats {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      display: flex;
+      gap: 1rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* PART 1 — LOCATION PERMISSION POPUP */
+    .popup-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s;
+    }
+
+    .popup-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .popup-card {
+      background: white;
+      border-radius: 24px;
+      padding: 2.5rem;
+      width: 90%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 
+        0 30px 60px rgba(0, 0, 0, 0.1),
+        0 1px 3px rgba(0, 0, 0, 0.02);
+      transform: scale(0.85);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .popup-overlay.active .popup-card {
+      transform: scale(1);
+    }
+
+    .popup-icon-container {
+      margin-bottom: 1.5rem;
+      position: relative;
+      display: inline-block;
+    }
+
+    .popup-icon {
+      font-size: 3.5rem;
+      filter: drop-shadow(0 0 10px rgba(232, 160, 160, 0.4));
+      display: inline-block;
+      animation: bounce-pin 2s ease-in-out infinite;
+    }
+
+    .popup-icon-glow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(232, 160, 160, 0.2);
+      z-index: -1;
+      animation: pulse-glow 1.5s infinite;
+    }
+
+    @keyframes bounce-pin {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    @keyframes pulse-glow {
+      0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+      100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+    }
+
+    .popup-title {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 0.75rem;
+      letter-spacing: -0.01em;
+    }
+
+    .popup-text {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 2rem;
+    }
+
+    .popup-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .btn {
+      padding: 0.9rem 1.5rem;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      outline: none;
+      transition: transform 0.15s, background-color 0.2s, box-shadow 0.2s;
+    }
+
+    .btn-primary {
+      background: #e8a0a0;
+      color: white;
+      box-shadow: 0 4px 15px rgba(232, 160, 160, 0.4);
+    }
+
+    .btn-primary:hover {
+      background: #df8a8a;
+      box-shadow: 0 6px 20px rgba(232, 160, 160, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: #f4f4f5;
+      color: var(--text-secondary);
+    }
+
+    .btn-secondary:hover {
+      background: #e4e4e7;
+      color: var(--text-primary);
+    }
+
+    .popup-error {
+      margin-top: 1rem;
+      font-size: 0.75rem;
+      color: #cb6e6e;
+      font-weight: 600;
+      display: none;
+      animation: shake 0.3s ease;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient background grid -->
+  <div class="bg-grid"></div>
+
+  <!-- PART 1 — LOCATION PERMISSION POPUP -->
+  <div class="popup-overlay" id="locationPopup">
+    <div class="popup-card">
+      <div class="popup-icon-container">
+        <span class="popup-icon">📍</span>
+        <div class="popup-icon-glow"></div>
+      </div>
+      <h2 class="popup-title">Find Writers Near You</h2>
+      <p class="popup-text">Allow location access to discover available writers in your area in real time.</p>
+      
+      <div class="popup-buttons">
+        <button class="btn btn-primary" id="btnEnable">Enable Location</button>
+        <button class="btn btn-secondary" id="btnLater">Maybe Later</button>
+      </div>
+      <div class="popup-error" id="locationError">Location access denied. Showing demo mode.</div>
+    </div>
+  </div>
+
+  <!-- PART 2 — RADAR UI -->
+  <div class="radar-wrapper" id="radarWrapper">
+    <header class="header">
+      <h1 class="title">LIVE NEARBY AVAILABLE WRITERS RADAR</h1>
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        <span id="statusText">RADAR SCANNER ACTIVE</span>
+      </div>
+    </header>
+
+    <div class="radar-container" id="radarContainer">
+      <canvas id="radarCanvas"></canvas>
+      <div class="radar-overlay" id="blipOverlay"></div>
+      
+      <!-- Shared Tooltip container -->
+      <div class="tooltip" id="radarTooltip">
+        <div class="tooltip-header">
+          <span class="tooltip-name" id="tipName">Priya S.</span>
+          <span class="tooltip-rating" id="tipRating">⭐ 4.9</span>
+        </div>
+        <p class="tooltip-spec" id="tipSpec">UG Projects, Lab Manuals</p>
+        <div class="tooltip-footer">
+          <span class="badge" id="tipBadge">Available Now</span>
+          <button class="tooltip-btn" id="tipRequestBtn">Request Writer →</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="radar-footer">
+      <div class="legend">
+        <div class="legend-item">
+          <span class="legend-dot" style="background-color: var(--color-available)"></span>
+          <span>Available</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot" style="background-color: var(--color-busy)"></span>
+          <span>Busy</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot" style="background-color: var(--color-offline)"></span>
+          <span>Offline</span>
+        </div>
+      </div>
+      
+      <div class="stats">
+        <span>RADIUS: <span id="radiusText">~5 km</span></span>
+        <span>•</span>
+        <span>COUNT: <span id="writerCountText">0 Writers Nearby</span></span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    // PART 4 — MOCK WRITER DATA
+    const mockWriters = [
+      { id: 1, name: "Priya S.",     rating: 4.9, spec: "UG Projects, Lab Manuals",        status: "available", angle: 45,  dist: 0.35 },
+      { id: 2, name: "Arjun M.",     rating: 4.7, spec: "Assignments, Record Notes",        status: "busy",      statusColor: "#FFA500", angle: 120, dist: 0.55 },
+      { id: 3, name: "Sneha R.",     rating: 4.8, spec: "Final Year Projects, PPT",         status: "available", angle: 200, dist: 0.42 },
+      { id: 4, name: "Karthik V.",   rating: 4.6, spec: "Hardware & IoT Projects",          status: "available", angle: 290, dist: 0.68 },
+      { id: 5, name: "Divya T.",     rating: 4.5, spec: "Diagrams, Lab Manuals",            status: "busy",      statusColor: "#FFA500", angle: 155, dist: 0.28 },
+      { id: 6, name: "Rahul N.",     rating: 4.9, spec: "AI/ML Projects, Documentation",   status: "available", angle: 330, dist: 0.75 },
+      { id: 7, name: "Meena K.",     rating: 4.3, spec: "School Assignments, Models",       status: "offline",   angle: 75,  dist: 0.60 },
+      { id: 8, name: "Vijay P.",     rating: 4.7, spec: "Software Projects, Mini Projects", status: "available", angle: 240, dist: 0.50 }
+    ];
+
+    // Status config mapping
+    const STATUS_CONFIG = {
+      available: { label: "Available Now", badgeClass: "badge-available", color: "#00c896" },
+      busy: { label: "Busy", badgeClass: "badge-busy", color: "#FFA500" },
+      offline: { label: "Offline", badgeClass: "badge-offline", color: "#ccc" }
+    };
+
+    // State Variables
+    let isDemoMode = true;
+    let userCoords = null;
+    let writersList = [];
+    let canvas, ctx;
+    let sweepAngle = 0;
+    let animationFrameId = null;
+    let selectedWriterId = null;
+    let activePings = []; // Ripples when new writers appear
+    
+    // DOM Elements
+    const locationPopup = document.getElementById("locationPopup");
+    const radarWrapper = document.getElementById("radarWrapper");
+    const btnEnable = document.getElementById("btnEnable");
+    const btnLater = document.getElementById("btnLater");
+    const locationError = document.getElementById("locationError");
+    const radarCanvas = document.getElementById("radarCanvas");
+    const blipOverlay = document.getElementById("blipOverlay");
+    const radarTooltip = document.getElementById("radarTooltip");
+    const statusText = document.getElementById("statusText");
+    const radiusText = document.getElementById("radiusText");
+    const writerCountText = document.getElementById("writerCountText");
+    const tipName = document.getElementById("tipName");
+    const tipRating = document.getElementById("tipRating");
+    const tipSpec = document.getElementById("tipSpec");
+    const tipBadge = document.getElementById("tipBadge");
+    const tipRequestBtn = document.getElementById("tipRequestBtn");
+
+    // Initialize Page
+    window.addEventListener("DOMContentLoaded", () => {
+      // Show location permission popup automatically on load
+      setTimeout(() => {
+        locationPopup.classList.add("active");
+      }, 300);
+      
+      // Bind Permission Buttons
+      btnEnable.addEventListener("click", requestLiveLocation);
+      btnLater.addEventListener("click", startDemoMode);
+      
+      // Init Canvas context
+      canvas = radarCanvas;
+      ctx = canvas.getContext("2d");
+      
+      // Resize Handler
+      window.addEventListener("resize", handleResize);
+    });
+
+    // Request Location from Geolocation API
+    function requestLiveLocation() {
+      if (!navigator.geolocation) {
+        showLocationError("Geolocation is not supported by your browser.");
+        setTimeout(startDemoMode, 1500);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          // Success Callback
+          userCoords = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+          isDemoMode = false;
+          statusText.textContent = "LIVE RADAR SCANNER ACTIVE";
+          radiusText.textContent = "~5 km";
+          closePopup();
+          initializeRadar();
+        },
+        (error) => {
+          // Error Callback
+          showLocationError("Location access denied. Showing demo mode.");
+          setTimeout(startDemoMode, 1500);
+        },
+        { timeout: 10000, enableHighAccuracy: true }
+      );
+    }
+
+    // Display Popup inline error message
+    function showLocationError(msg) {
+      locationError.textContent = msg;
+      locationError.style.display = "block";
+    }
+
+    // Close Popup Modal
+    function closePopup() {
+      locationPopup.classList.remove("active");
+      setTimeout(() => {
+        locationPopup.style.display = "none";
+        radarWrapper.classList.add("visible");
+      }, 300);
+    }
+
+    // Start Demo Mode with Mock Data
+    function startDemoMode() {
+      isDemoMode = true;
+      statusText.textContent = "DEMO SCANNER ACTIVE";
+      radiusText.textContent = "Mock Area";
+      closePopup();
+      initializeRadar();
+    }
+
+    // Initialize Radar UI and logic
+    function initializeRadar() {
+      generateWriters();
+      handleResize();
+      
+      // Start Sweep loop
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      renderLoop();
+
+      // Trigger incoming mock writers periodically (every 8-12 seconds)
+      scheduleRandomPing();
+    }
+
+    // Generate writers based on mode
+    function generateWriters() {
+      if (isDemoMode) {
+        // Deep copy mock data
+        writersList = mockWriters.map(w => ({
+          ...w,
+          lastSwept: 0,
+          currentGlow: 0
+        }));
+      } else {
+        // Generate random coordinates within a small offset of user coords (~0.05 lat/lon degree radius is roughly 5km)
+        writersList = mockWriters.map(w => {
+          const latOffset = (Math.random() - 0.5) * 0.07;
+          const lonOffset = (Math.random() - 0.5) * 0.07;
+          
+          return {
+            ...w,
+            latitude: userCoords.latitude + latOffset,
+            longitude: userCoords.longitude + lonOffset,
+            lastSwept: 0,
+            currentGlow: 0
+          };
+        });
+      }
+      updateWriterCount();
+    }
+
+    // Update the nearby count text
+    function updateWriterCount() {
+      const activeWriters = writersList.filter(w => w.status !== "offline").length;
+      writerCountText.textContent = `${activeWriters} Writers Nearby`;
+    }
+
+    // Handle responsive sizing of canvas and blips
+    function handleResize() {
+      const parentWidth = Math.min(window.innerWidth, window.innerHeight) * 0.70;
+      const size = Math.max(300, Math.min(600, parentWidth));
+      
+      canvas.style.width = size + "px";
+      canvas.style.height = size + "px";
+      
+      // Handle high DPI retina display scaling
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = size * dpr;
+      canvas.height = size * dpr;
+      ctx.scale(dpr, dpr);
+
+      // Re-position blips
+      updateBlipOverlayPositions();
+      hideTooltip();
+    }
+
+    // Maps writer angle/distance or LatLng to polar screen coordinates
+    function getBlipCoordinates(writer) {
+      const size = parseFloat(canvas.style.width);
+      const centerX = size / 2;
+      const centerY = size / 2;
+      const radarRadius = (size / 2) - 10; // offset slightly from outer edge
+
+      if (isDemoMode || !writer.latitude) {
+        // Map using exact angle (0 = North, clockwise) and dist (fraction of radius)
+        const angleRad = (writer.angle - 90) * Math.PI / 180;
+        const x = centerX + radarRadius * writer.dist * Math.cos(angleRad);
+        const y = centerY + radarRadius * writer.dist * Math.sin(angleRad);
+        return { x, y };
+      } else {
+        // Live mode coordinates translation using user coordinates as center
+        // Offset range -0.05 to +0.05 mapped to 0 to radarRadius
+        const dLat = writer.latitude - userCoords.latitude;
+        const dLon = writer.longitude - userCoords.longitude;
+        
+        // Linear scale where 0.05 degree offset = full radar radius
+        const maxOffset = 0.05;
+        const mapX = (dLon / maxOffset) * radarRadius;
+        const mapY = -(dLat / maxOffset) * radarRadius; // invert Y since Lat increases going north (up)
+
+        // Clip coordinates within radar radius
+        const distFromCenter = Math.sqrt(mapX * mapX + mapY * mapY);
+        let finalX = centerX + mapX;
+        let finalY = centerY + mapY;
+        
+        if (distFromCenter > radarRadius) {
+          finalX = centerX + (mapX / distFromCenter) * radarRadius;
+          finalY = centerY + (mapY / distFromCenter) * radarRadius;
+        }
+
+        return { x: finalX, y: finalY };
+      }
+    }
+
+    // Render loop using requestAnimationFrame
+    function renderLoop() {
+      // 1. Draw Radar UI Canvas
+      drawRadarCanvas();
+
+      // 2. Increment sweep angle
+      // 3-4 seconds per rotation = (2 * Math.PI / (3.5s * 60fps)) ~ 0.03 radians/frame
+      sweepAngle += 0.022; 
+      if (sweepAngle > Math.PI * 2) sweepAngle -= Math.PI * 2;
+
+      // 3. Update blip sweep collisions and canvas glows
+      checkSweepCollisions();
+
+      // 4. Update and draw pings (expanded ripples)
+      drawPings();
+
+      animationFrameId = requestAnimationFrame(renderLoop);
+    }
+
+    // Draw the radar grid and sweep wedge on canvas
+    function drawRadarCanvas() {
+      const size = parseFloat(canvas.style.width);
+      const centerX = size / 2;
+      const centerY = size / 2;
+      const radarRadius = (size / 2) - 10;
+
+      ctx.clearRect(0, 0, size, size);
+
+      // Draw concentric rings
+      const ringsCount = 5;
+      ctx.strokeStyle = "rgba(232, 160, 160, 0.22)";
+      ctx.lineWidth = 1;
+      
+      for (let i = 1; i <= ringsCount; i++) {
+        const radius = (radarRadius / ringsCount) * i;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Draw crosshair axes
+      ctx.beginPath();
+      ctx.moveTo(centerX - radarRadius, centerY);
+      ctx.lineTo(centerX + radarRadius, centerY);
+      ctx.moveTo(centerX, centerY - radarRadius);
+      ctx.lineTo(centerX, centerY + radarRadius);
+      ctx.stroke();
+
+      // Draw outer circle ticks
+      const ticks = 72; // Every 5 degrees
+      ctx.strokeStyle = "rgba(232, 160, 160, 0.4)";
+      for (let i = 0; i < ticks; i++) {
+        const angle = (i * (360 / ticks)) * Math.PI / 180;
+        const isMajor = i % 6 === 0; // Major tick every 30 deg
+        const tickLen = isMajor ? 6 : 3;
+        
+        const outerX = centerX + radarRadius * Math.cos(angle);
+        const outerY = centerY + radarRadius * Math.sin(angle);
+        const innerX = centerX + (radarRadius - tickLen) * Math.cos(angle);
+        const innerY = centerY + (radarRadius - tickLen) * Math.sin(angle);
+        
+        ctx.beginPath();
+        ctx.moveTo(outerX, outerY);
+        ctx.lineTo(innerX, innerY);
+        ctx.stroke();
+      }
+
+      // Draw fading sweep wedges
+      const sweepWidth = 35; // Sector width in degrees
+      const numSegments = 50;
+      for (let i = 0; i < numSegments; i++) {
+        const segmentAngle = sweepAngle - (i * (sweepWidth / numSegments)) * Math.PI / 180;
+        const opacity = 0.20 * (1 - i / numSegments);
+        
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radarRadius, segmentAngle - 0.01, segmentAngle, false);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(232, 160, 160, ${opacity})`;
+        ctx.fill();
+      }
+
+      // Draw rotating sweep leading edge
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(centerX + radarRadius * Math.cos(sweepAngle), centerY + radarRadius * Math.sin(sweepAngle));
+      ctx.strokeStyle = "rgba(232, 160, 160, 0.75)";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+
+    // Check if the rotating sweep wedge passes over a blip
+    function checkSweepCollisions() {
+      const size = parseFloat(canvas.style.width);
+      const centerX = size / 2;
+      const centerY = size / 2;
+
+      writersList.forEach(w => {
+        const coords = getBlipCoordinates(w);
+        const dx = coords.x - centerX;
+        const dy = coords.y - centerY;
+        
+        // Find angle in radians (-PI to PI, mapped to 0 to 2*PI)
+        let blipAngle = Math.atan2(dy, dx);
+        if (blipAngle < 0) blipAngle += Math.PI * 2;
+
+        // Find angular delta between sweep and blip
+        let delta = sweepAngle - blipAngle;
+        if (delta < 0) delta += Math.PI * 2;
+
+        // If sweep is slightly past blip (within sweep sector width ~0.4 radians)
+        if (delta >= 0 && delta < 0.2) {
+          w.lastSwept = Date.now();
+        }
+
+        // Draw dynamic blip visual effects on canvas (pulses, sweeps)
+        const timeSinceSwept = Date.now() - w.lastSwept;
+        let sweepGlowMultiplier = 1.0;
+        
+        if (timeSinceSwept < 500) {
+          // Increase blip brightness and glow intensity for 0.5s after sweep passes
+          sweepGlowMultiplier = 1.0 + (1.0 - timeSinceSwept / 500) * 1.5;
+        }
+
+        // We update the inline HTML Blip glowing state
+        const marker = document.getElementById(`blip-${w.id}`);
+        if (marker) {
+          const dot = marker.querySelector(".blip-dot");
+          if (timeSinceSwept < 500) {
+            dot.style.transform = `scale(${1.0 + (1.0 - timeSinceSwept / 500) * 0.45})`;
+            dot.style.filter = `brightness(${1.0 + (1.0 - timeSinceSwept / 500) * 0.6})`;
+          } else {
+            dot.style.transform = "scale(1)";
+            dot.style.filter = "brightness(1)";
+          }
+        }
+      });
+    }
+
+    // Dynamic Blip marker div rendering overlaid on Canvas
+    function updateBlipOverlayPositions() {
+      // Clear old overlay blips
+      blipOverlay.innerHTML = "";
+
+      writersList.forEach(w => {
+        const coords = getBlipCoordinates(w);
+        
+        const marker = document.createElement("div");
+        marker.className = "blip-marker";
+        marker.id = `blip-${w.id}`;
+        marker.style.left = `${coords.x}px`;
+        marker.style.top = `${coords.y}px`;
+
+        const config = STATUS_CONFIG[w.status];
+        
+        marker.innerHTML = `
+          <div class="blip-dot" style="background-color: ${config.color}; color: ${config.color};"></div>
+          <div class="blip-halo" style="color: ${config.color};"></div>
+        `;
+
+        // Event listener to show details on click
+        marker.addEventListener("click", (e) => {
+          e.stopPropagation();
+          showTooltip(w, coords);
+        });
+
+        blipOverlay.appendChild(marker);
+      });
+    }
+
+    // Shows details popover near blip with boundary checking
+    function showTooltip(writer, coords) {
+      selectedWriterId = writer.id;
+      
+      const config = STATUS_CONFIG[writer.status];
+      tipName.textContent = writer.name;
+      tipRating.textContent = `⭐ ${writer.rating.toFixed(1)}`;
+      tipSpec.textContent = writer.spec;
+      tipBadge.textContent = config.label;
+      
+      // Update badge class
+      tipBadge.className = `badge ${config.badgeClass}`;
+
+      // Reset request action binding
+      tipRequestBtn.onclick = () => requestWriter(writer.id);
+
+      // Positioning tooltip
+      const size = parseFloat(canvas.style.width);
+      let x = coords.x;
+      let y = coords.y - 12; // sitting slightly above blip
+
+      radarTooltip.style.display = "block";
+      
+      // Set tentative placement
+      radarTooltip.style.left = `${x}px`;
+      radarTooltip.style.top = `${y}px`;
+      radarTooltip.style.transform = "translate(-50%, -100%) scale(1)";
+      
+      // Force render layout to read boundaries
+      radarTooltip.classList.add("visible");
+      
+      // Shift tooltip if overflowing bounds
+      const tooltipRect = radarTooltip.getBoundingClientRect();
+      const containerRect = radarContainer.getBoundingClientRect();
+      
+      let finalLeft = x;
+      let finalTop = y;
+      let transformX = "-50%";
+      let transformY = "-100%";
+
+      // Check Horizontal Left overflow
+      if (tooltipRect.left < containerRect.left) {
+        finalLeft = tooltipRect.width / 2 + 10;
+      }
+      // Check Horizontal Right overflow
+      if (tooltipRect.right > containerRect.right) {
+        finalLeft = size - (tooltipRect.width / 2) - 10;
+      }
+      // Check Vertical Top overflow (Flipping below blip)
+      if (tooltipRect.top < containerRect.top) {
+        finalTop = coords.y + 12;
+        transformY = "0%";
+      }
+
+      radarTooltip.style.left = `${finalLeft}px`;
+      radarTooltip.style.top = `${finalTop}px`;
+      radarTooltip.style.transform = `translate(${transformX}, ${transformY}) scale(1)`;
+
+      // Hide tooltip when clicking anywhere else
+      document.removeEventListener("click", hideTooltip);
+      setTimeout(() => {
+        document.addEventListener("click", hideTooltip);
+      }, 50);
+    }
+
+    // Close blip tooltip details
+    function hideTooltip() {
+      radarTooltip.classList.remove("visible");
+      selectedWriterId = null;
+    }
+
+    // Request Writer Action Placeholder
+    function requestWriter(writerId) {
+      console.log(`[REQUEST WRITER]: Dispatched writer matching invitation request. Target Writer ID: ${writerId}`);
+      alert(`Request sent to writer! Match invitation dispatched.`);
+      hideTooltip();
+    }
+
+    // Draw active expanding ripples on canvas
+    function drawPings() {
+      activePings.forEach((ping, idx) => {
+        ping.radius += 1.8;
+        ping.alpha = 1.0 - (ping.radius / ping.maxRadius);
+
+        if (ping.alpha <= 0) {
+          activePings.splice(idx, 1);
+          return;
+        }
+
+        ctx.beginPath();
+        ctx.arc(ping.x, ping.y, ping.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(232, 160, 160, ${ping.alpha * 0.7})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+    }
+
+    // Periodically schedules random writer logins / triggers (Simulates network grid activity)
+    function scheduleRandomPing() {
+      const delay = 8000 + Math.random() * 4000; // 8 to 12 seconds
+      setTimeout(() => {
+        triggerNewWriterPing();
+        scheduleRandomPing();
+      }, delay);
+    }
+
+    // Simulated network node login event
+    function triggerNewWriterPing() {
+      // Find an offline mock writer or add a new dynamic writer
+      let writer = writersList.find(w => w.status === "offline");
+      
+      if (writer) {
+        // Toggle offline writer back online (available)
+        writer.status = "available";
+        writer.angle = Math.floor(Math.random() * 360);
+        writer.dist = 0.2 + Math.random() * 0.6;
+      } else {
+        // Create a new dynamic writer
+        const nextId = writersList.length + 1;
+        const firstNames = ["Siddharth", "Aishwarya", "Ananya", "Rohan", "Vikram", "Tanvi"];
+        const lastNames = ["R.", "K.", "S.", "M.", "V.", "N."];
+        const randomName = `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`;
+        
+        writer = {
+          id: nextId,
+          name: randomName,
+          rating: 4.2 + Math.random() * 0.8,
+          spec: "Research Reports, Mini Projects",
+          status: "available",
+          angle: Math.floor(Math.random() * 360),
+          dist: 0.2 + Math.random() * 0.6,
+          lastSwept: 0,
+          currentGlow: 0
+        };
+        
+        if (!isDemoMode) {
+          const latOffset = (Math.random() - 0.5) * 0.07;
+          const lonOffset = (Math.random() - 0.5) * 0.07;
+          writer.latitude = userCoords.latitude + latOffset;
+          writer.longitude = userCoords.longitude + lonOffset;
+        }
+
+        writersList.push(writer);
+      }
+
+      // Refresh blips
+      updateBlipOverlayPositions();
+      updateWriterCount();
+
+      // Trigger ripple coordinate positioning
+      const coords = getBlipCoordinates(writer);
+      activePings.push({
+        x: coords.x,
+        y: coords.y,
+        radius: 6,
+        maxRadius: 75,
+        alpha: 1.0
+      });
+
+      console.log(`[RADAR PING]: Node online: ${writer.name} logged into matching network.`);
+    }
+  </script>
+</body>
+</html>
