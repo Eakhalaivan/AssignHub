@@ -5,8 +5,7 @@ import * as z from 'zod';
 import { useDropzone } from 'react-dropzone';
 import { useCreateOrder } from '../../hooks/useOrders';
 import { useAuthStore } from '../../store/authStore';
-import { PaymentGateway } from '../../components/common/PaymentGateway';
-import { getPricing } from '../../api/orderApi';
+import { getPricing, initiatePayment, verifyPayment } from '../../api/orderApi';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -451,34 +450,97 @@ export default function NewOrder() {
   const [userCenter, setUserCenter] = useState({ lat: 13.0827, lng: 80.2707 });
   const [locationError, setLocationError] = useState(null);
   const [dontAskAgain, setDontAskAgain] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('wallet'); // 'wallet' | 'card'
   const { user } = useAuthStore();
-  const [stripeError, setStripeError] = useState(null);
   const [createdOrder, setCreatedOrder] = useState(null);
   const [isOrderPreCreating, setIsOrderPreCreating] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
   const [paymentState, setPaymentState] = useState('idle'); // 'idle' | 'success' | 'error'
 
-  const handlePaymentSuccess = async (paymentIntent) => {
+  const handleRazorpayPayment = async () => {
+    setIsPaying(true);
     try {
-      await api.post(`/orders/${createdOrder.id}/paid`, {
-        stripePaymentIntentId: paymentIntent.id,
-        amountPaid: paymentIntent.amount / 100
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        toast.error('Razorpay SDK failed to load. Are you online?');
+        setIsPaying(false);
+        return;
+      }
+
+      const order = await ensureOrderCreated();
+      if (!order) {
+        setIsPaying(false);
+        return;
+      }
+
+      const paymentDetails = await initiatePayment(order.id, quote.grandTotal);
+
+      if ((paymentDetails.razorpayOrderId && paymentDetails.razorpayOrderId.startsWith('mock_order_')) || 
+          (paymentDetails.keyId && paymentDetails.keyId.startsWith('rzp_test_placeholder'))) {
+        console.log("Mock payment mode activated. Auto-verifying transaction.");
+        await verifyPayment({
+          razorpayOrderId: paymentDetails.razorpayOrderId || ('mock_order_' + Date.now()),
+          razorpayPaymentId: 'pay_mock_' + Math.random().toString(36).substring(2, 9),
+          razorpaySignature: 'sig_mock_' + Math.random().toString(36).substring(2, 9)
+        });
+        setPaymentState('success');
+        setTimeout(() => {
+          navigate('/student/orders');
+        }, 2000);
+        return;
+      }
+
+      const options = {
+        key: paymentDetails.keyId,
+        amount: (paymentDetails.amount * 100).toString(),
+        currency: paymentDetails.currency,
+        name: 'Academix',
+        description: paymentDetails.orderDescription,
+        order_id: paymentDetails.razorpayOrderId,
+        handler: async (response) => {
+          try {
+            await verifyPayment({
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature
+            });
+            setPaymentState('success');
+            setTimeout(() => {
+              navigate('/student/orders');
+            }, 2000);
+          } catch (err) {
+            console.error('Verification failed', err);
+            toast.error('Payment verification failed. Please contact support.');
+            setPaymentState('error');
+          }
+        },
+        prefill: {
+          name: paymentDetails.studentName || user?.name || '',
+          email: paymentDetails.studentEmail || user?.email || '',
+          contact: paymentDetails.studentContact || user?.phone || '',
+        },
+        theme: {
+          color: '#c5a880',
+        },
+        modal: {
+          ondismiss: function() {
+            setIsPaying(false);
+          }
+        }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response) {
+        console.error(response.error);
+        toast.error('Payment failed: ' + response.error.description);
+        setPaymentState('error');
+        setIsPaying(false);
       });
-
-      setPaymentState('success');
-
-      setTimeout(() => {
-        navigate('/student/orders');
-      }, 2000);
+      rzp.open();
     } catch (err) {
-      console.error('Failed to update payment status:', err);
-      toast.error('Payment was successful, but server registration failed. Please contact support.');
+      console.error('Payment initiation failed', err);
+      toast.error('Failed to initiate payment. Please try again.');
+      setIsPaying(false);
     }
-  };
-
-  const handlePaymentError = (errorMessage) => {
-    setStripeError(errorMessage);
-    setPaymentState('error');
   };
 
   const ensureOrderCreated = async () => {
@@ -528,18 +590,13 @@ export default function NewOrder() {
       return newOrder;
     } catch (err) {
       console.error('Failed to pre-create order:', err);
-      toast.error('Could not initiate Stripe checkout. Failed to create order.');
+      toast.error('Could not initiate Razorpay checkout. Failed to create order.');
       setIsOrderPreCreating(false);
-      setPaymentMethod('wallet');
       return null;
     }
   };
 
-  useEffect(() => {
-    if (step === 6 && paymentMethod === 'card') {
-      ensureOrderCreated();
-    }
-  }, [step, paymentMethod]);
+
 
   const requestLiveLocation = () => {
     if (!navigator.geolocation) {
@@ -693,56 +750,7 @@ export default function NewOrder() {
   };
 
   const onSubmitForm = async (data) => {
-    try {
-      if (paymentMethod === 'card') {
-        return;
-      }
-
-      if (createdOrder) {
-        toast.success('Order successfully registered.');
-        navigate('/student/orders');
-        return;
-      }
-
-      // 1. Upload files first if any
-      let fileUrls = '';
-      if (files.length > 0) {
-        const uploadPromises = files.map(file => {
-          const fd = new FormData();
-          fd.append('file', file);
-          return api.post('/files/upload', fd, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          }).then(res => res.data.data);
-        });
-        const uploadedUrls = await Promise.all(uploadPromises);
-        fileUrls = uploadedUrls.join(',');
-      }
-
-      // 2. Format detailed quotation block
-      const quoteText = generateQuoteText(data, quote);
-
-      // 3. Build JSON payload matching OrderRequest DTO structure with mappings
-      const payload = {
-        ...data,
-        orderType: mapServiceToOrderType(data.serviceType),
-        urgency: mapPriorityToUrgency(data.deliveryPriority),
-        workType: mapMediumToWorkType(data.outputMedium),
-        description: `${quoteText}\n\n=== STUDENT DESCRIPTION ===\n\n${data.description}`,
-        materialCost: isNaN(Number(data.materialCost)) ? 0 : Number(data.materialCost),
-        pages: isNaN(Number(data.pages)) ? 1 : Number(data.pages),
-        locationRadiusKm: isNaN(Number(data.locationRadiusKm)) ? 5.0 : Number(data.locationRadiusKm),
-        latitude: userCenter.lat,
-        longitude: userCenter.lng,
-        fileUrls: fileUrls || null
-      };
-
-      await createOrder(payload);
-      toast.success('Order successfully registered.');
-      navigate('/student/orders');
-    } catch (err) {
-      console.error('Submit form error:', err);
-      toast.error('Failed to register order. Limit exceeded or invalid parameter.');
-    }
+    // Form submission is handled via handleRazorpayPayment in Step 6
   };
 
 
@@ -1499,100 +1507,37 @@ export default function NewOrder() {
                   ) : (
                     <>
                       <div className="text-center pb-2">
-                        <div className="w-12 h-12 bg-[#70a382]/10 border border-[#70a382]/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <CreditCard className="w-6 h-6 text-[#70a382]" />
+                        <div className="w-12 h-12 bg-[#c5a880]/10 border border-[#c5a880]/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <CreditCard className="w-6 h-6 text-[#c5a880]" />
                         </div>
                         <h3 className="font-orbitron font-semibold text-sm text-primary uppercase tracking-wider">
-                          Authorise Order Payment
+                          Secure Payment Checkout
                         </h3>
                         <p className="text-secondary text-xs mt-1.5 max-w-sm mx-auto font-dm">
-                          Total: <span className="text-[#c5a880] font-semibold">&#8377;{formatINR(quote.grandTotal)}</span>. Choose how to pay.
+                          You are paying <span className="text-[#c5a880] font-semibold">&#8377;{formatINR(quote.grandTotal)}</span> for your academic assignment.
                         </p>
                       </div>
 
-                      {/* Payment method toggle */}
-                      <div className="flex gap-2 p-1 bg-black/40 rounded-lg border border-white/5">
-                        <button
-                          type="button"
-                          id="pay-wallet-tab"
-                          onClick={() => setPaymentMethod('wallet')}
-                          className={clsx(
-                            'flex-1 py-2 text-xs font-semibold rounded-md transition-all duration-200 uppercase tracking-wider font-orbitron',
-                            paymentMethod === 'wallet'
-                              ? 'bg-[#1e3a2b] text-[#70a382] border border-[#70a382]/30'
-                              : 'text-secondary hover:text-primary'
-                          )}
-                        >
-                          Wallet
-                        </button>
-                        <button
-                          type="button"
-                          id="pay-card-tab"
-                          onClick={() => { setPaymentMethod('card'); setStripeError(null); }}
-                          className={clsx(
-                            'flex-1 py-2 text-xs font-semibold rounded-md transition-all duration-200 uppercase tracking-wider font-orbitron',
-                            paymentMethod === 'card'
-                              ? 'bg-[#1e2a3a] text-[#6e96cb] border border-[#6e96cb]/30'
-                              : 'text-secondary hover:text-primary'
-                          )}
-                        >
-                          Pay with Card
-                        </button>
+                      <div className="bg-[#09090b]/50 p-5 rounded border border-white/5 space-y-4 text-xs font-mono">
+                        <div className="flex justify-between items-center text-secondary border-b border-white/5 pb-2">
+                          <span className="uppercase text-[9px] tracking-wider text-muted">Project Title</span>
+                          <span className="text-primary truncate max-w-[200px]">{formValues.title || 'Untitled Project'}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-secondary border-b border-white/5 pb-2">
+                          <span className="uppercase text-[9px] tracking-wider text-muted">Service Type</span>
+                          <span className="text-primary">{formValues.serviceType}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-secondary font-semibold">
+                          <span className="uppercase text-[9px] tracking-wider text-muted">Amount to Pay</span>
+                          <span className="text-[#c5a880] font-bold text-sm">&#8377;{formatINR(quote.grandTotal)}</span>
+                        </div>
                       </div>
 
-                      {/* Wallet payment detail */}
-                      {paymentMethod === 'wallet' && (
-                        <div className="bg-[#09090b]/50 p-4 rounded border border-white/5 space-y-3.5 text-xs font-mono select-none">
-                          <div className="flex justify-between items-center text-secondary">
-                            <span>WALLET BALANCE</span>
-                            <span>&#8377;{(14280.00).toLocaleString('en-IN')}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-[#cb6e6e] border-b border-white/5 pb-2.5">
-                            <span>ORDER COST</span>
-                            <span>- &#8377;{formatINR(quote.grandTotal)}</span>
-                          </div>
-                          <div className="flex justify-between items-center text-[#70a382] font-semibold">
-                            <span>REMAINING FUNDS</span>
-                            <span>&#8377;{formatINR(14280.00 - quote.grandTotal)}</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Stripe card payment */}
-                      {paymentMethod === 'card' && (
-                        <div className="space-y-3">
-                          {isOrderPreCreating ? (
-                            <div className="flex flex-col items-center justify-center py-6 space-y-2">
-                              <div className="w-6 h-6 border-2 border-t-transparent border-[#6e96cb] rounded-full animate-spin" />
-                              <p className="text-secondary text-xs font-mono">Creating order...</p>
-                            </div>
-                          ) : createdOrder ? (
-                            <PaymentGateway
-                              amount={quote.grandTotal}
-                              onSuccess={handlePaymentSuccess}
-                              onError={handlePaymentError}
-                              orderId={createdOrder.id}
-                              studentId={user?.id}
-                            />
-                          ) : (
-                            <div className="text-center py-4">
-                              <p className="text-[#cb6e6e] text-xs font-mono">Failed to initiate card checkout.</p>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="xs"
-                                onClick={ensureOrderCreated}
-                                className="mt-2 text-[10px]"
-                              >
-                                Retry
-                              </Button>
-                            </div>
-                          )}
-                          <p className="text-secondary text-[10px] font-mono text-center pt-2 border-t border-white/5">
-                            Secured by Stripe. Your card details are never stored on our servers.
-                          </p>
-                        </div>
-                      )}
+                      <div className="text-center py-2 space-y-2 border-t border-white/5 pt-4">
+                        <p className="text-secondary text-[10px] font-mono leading-relaxed">
+                          Secured by Razorpay. UPI, Cards, NetBanking, GPay, PhonePe, and other methods are supported.
+                        </p>
+                      </div>
                     </>
                   )}
                 </Card>
@@ -1628,17 +1573,16 @@ export default function NewOrder() {
                     <span>Continue</span> <ArrowRight className="w-3.5 h-3.5" />
                   </Button>
                 ) : (
-                  paymentMethod !== 'card' && (
-                    <Button
-                      variant="primary"
-                      type="submit"
-                      size="sm"
-                      disabled={isPending}
-                      className="flex items-center gap-1.5 font-bold"
-                    >
-                      <span>{isPending ? 'Processing...' : 'Confirm Order & Pay'}</span>
-                    </Button>
-                  )
+                  <Button
+                    variant="primary"
+                    type="button"
+                    size="sm"
+                    disabled={isPaying || isOrderPreCreating}
+                    onClick={handleRazorpayPayment}
+                    className="flex items-center gap-1.5 font-bold"
+                  >
+                    <span>{isPaying || isOrderPreCreating ? 'Processing...' : `Pay ₹${formatINR(quote.grandTotal)}`}</span>
+                  </Button>
                 )}
               </div>
             )}

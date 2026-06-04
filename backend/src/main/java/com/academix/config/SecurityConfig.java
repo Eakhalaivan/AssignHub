@@ -38,7 +38,7 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .headers(headers -> headers
                 .xssProtection(xss -> xss.headerValue(org.springframework.security.web.header.writers.XXssProtectionHeaderWriter.HeaderValue.ENABLED_MODE_BLOCK))
-                .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.stripe.com; frame-src https://api.razorpay.com https://js.stripe.com https://hooks.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ws://localhost:8082 wss://localhost:8082 http://localhost:8082 http://localhost:5173 ws://localhost:5173 https://api.stripe.com;"))
+                .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'; script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://js.stripe.com; frame-src https://api.razorpay.com https://js.stripe.com https://hooks.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ws://localhost:8082 wss://localhost:8082 http://localhost:8082 http://localhost:5173 ws://localhost:5173 https://api.stripe.com https://api.razorpay.com;"))
                 .frameOptions(frame -> frame.deny())
             )
             .authorizeHttpRequests(auth -> auth
@@ -46,6 +46,7 @@ public class SecurityConfig {
                 .requestMatchers("/ws/**").permitAll() // Permit Stomp handshakes
                 .requestMatchers("/error").permitAll()
                 .requestMatchers("/stripe-webhook").permitAll() // Permit Stripe webhook callbacks
+                .requestMatchers("/payment/webhook").permitAll() // Permit Razorpay webhook callbacks
                 .anyRequest().authenticated()
             )
             .exceptionHandling(exception -> exception
